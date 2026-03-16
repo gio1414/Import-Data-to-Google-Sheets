@@ -1,63 +1,323 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>To-Do List → Google Sheets</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-</head>
-<body>
-    <div class="container">
-        <div class="card">
-            <div class="header">
-                <h1>📋 To-Do Sync</h1>
-                <p>Import your to-do list to Google Sheets</p>
-            </div>
+  <head>
+    <meta charset="UTF-8" />
+    <title>To Do List</title>
 
-            <div class="auth-section">
-                <button id="authButton" class="btn-primary">
-                    <span id="authText">Connect Google Sheets</span>
-                    <div id="authSpinner" class="spinner hidden"></div>
-                </button>
-            </div>
+    <link rel="stylesheet" href="style.css" />
 
-            <div id="todoSection" class="hidden">
-                <div class="input-group">
-                    <label for="sheetId">Google Sheet ID</label>
-                    <input type="text" id="sheetId" placeholder="Enter your Google Sheet ID">
-                    <small>Found in the URL: sheets.google.com/spreadsheets/d/[SHEET_ID]/edit</small>
-                </div>
+    <link
+      href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"
+      rel="stylesheet"
+    />
 
-                <div class="input-group">
-                    <label for="sheetName">Sheet Name</label>
-                    <input type="text" id="sheetName" value="Sheet1" placeholder="Sheet1">
-                </div>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css"
+    />
 
-                <div class="todo-input">
-                    <label>Add To-Do Items</label>
-                    <div class="todo-entry">
-                        <input type="text" id="todoInput" placeholder="e.g., Complete project proposal">
-                        <button id="addTodo" class="btn-secondary">+</button>
-                    </div>
-                </div>
+    <link
+      href="https://fonts.googleapis.com/css?family=Roboto"
+      rel="stylesheet"
+    />
 
-                <div id="todoList" class="todo-list"></div>
-
-                <div class="actions">
-                    <button id="importBtn" class="btn-primary full-width" disabled>
-                        <span>Import to Google Sheets</span>
-                        <div class="spinner hidden"></div>
-                    </button>
-                    <button id="clearBtn" class="btn-outline">Clear All</button>
-                </div>
-            </div>
-
-            <div id="status" class="status"></div>
-        </div>
-    </div>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    />
 
     <script src="https://apis.google.com/js/api.js"></script>
+  </head>
+
+  <body>
+    <div class="outer-box">
+      <div class="layout">
+        <!-- SIDEBAR -->
+        <div class="sidebar" id="sidebar">
+          <div class="menu-header">
+            <i class="fa fa-bars" id="hamburger"></i>
+            <span>Menu</span>
+          </div>
+
+          <div class="search-container">
+  <i class="fa fa-search"></i>
+  <input type="text" id="searchMenu" placeholder="Search task..." />
+</div>
+
+          <ul class="menu-links">
+            <li id="todoBtn" class="active">Add list</li>
+            <li id="stickyBtn">Sticky Wall</li>
+          </ul>
+        </div>
+
+        <!-- MAIN CONTENT -->
+        <div class="content">
+          <!-- TODO PAGE -->
+          <div id="todoPage">
+            <div class="top-row">
+              <h1>TO DO:</h1>
+
+              <div class="search-box">
+                <div class="search-icon">
+                  <i class="fa fa-search"></i>
+                </div>
+
+                <input
+                  type="text"
+                  id="searchTask"
+                  placeholder="Search task..."
+                />
+              </div>
+            </div>
+
+            <div id="container">
+              <ul id="taskList"></ul>
+
+              <button id="exportTodoBtn" class="sheets-btn">
+                <i class="fa-brands fa-google"></i>
+                Export to Google Sheets
+              </button>
+
+              <a href="https://docs.google.com/spreadsheets/d/1CmEgd8qWt0Ol8EfCEWd-8x4Ul_kHWYmKnurq-0e-E7g/edit?pli=1&gid=0#gid=0" 
+                target="_blank"
+                style="text-decoration: none;">
+                <button id="openSheetBtn" class="sheets-btn">
+                  <i class="fa-brands fa-google"></i>
+                    Open Google Sheets
+                </button>
+              </a>
+
+              <button id="addNoteBtn" class="sheets-btnS">
+                <i class="fa-solid fa-plus"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- STICKY WALL PAGE -->
+				<div id="stickyPage">
+
+					<h1 class="sticky-title">Sticky Wall</h1>
+
+					<div class="sticky-grid" id="stickyGrid">
+
+						<button class="add-note">+</button>
+
+					</div>
+
+				<!-- INLINE STICKY EDITOR -->
+					<div id="inlineStickyEditor" style="display:none;" class="sticky-editor-box">
+							<input id="editorTitle" class="sticky-title" placeholder="Title" />
+							<textarea id="editorContent" class="sticky-content" placeholder="Note something down..."></textarea>
+							<div class="sticky-editor-actions">
+								<button id="editorCancel" class="btn cancel">Cancel</button>
+								<button id="editorSave" class="btn save">Save</button>
+							</div>
+					</div>
+          
+
+          <button id="exportStickyBtn" class="sheets-btn">
+                <i class="fa-brands fa-google"></i>
+                Export to Google Sheets
+              </button>
+
+				</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADD TASK MODAL -->
+    <div id="addModal" class="modal">
+      <div class="modal-wrapper">
+        <div class="modal-content">
+          <div class="modal-header">
+            <i class="fa-solid fa-note-sticky"></i>
+            <h2>Add a Task</h2>
+          </div>
+
+          <input type="text" id="noteInput" placeholder="Type here..." />
+
+          <div class="modal-buttons">
+            <button id="addTaskBtn">Add</button>
+            <button id="cancelAdd">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EDIT TASK MODAL -->
+    <div id="editModal" class="modal">
+      <div class="modal-wrapper">
+        <div class="modal-content">
+          <div class="modal-header">
+            <i class="fa-solid fa-pen-to-square"></i>
+            <h2>Edit Your Task</h2>
+          </div>
+
+          <input type="text" id="editInput" placeholder="Update your task..." />
+
+          <div class="modal-buttons">
+            <button id="cancelEdit">Cancel</button>
+            <button id="saveEdit">Update</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GOOGLE SHEETS SYNC MODAL -->
+    <div id="sheetModal" class="modal">
+      <div class="modal-wrapper">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2>📋 To-Do Sync</h2>
+          </div>
+
+          <p>Import your to-do list to Google Sheets</p>
+
+          <div class="auth-section">
+            <button id="authButton">
+              <span>Connect Google Sheets</span>
+            </button>
+          </div>
+
+          <div id="todoSection">
+            <div class="input-group">
+              <label>Google Sheet ID</label>
+              <input type="text" id="sheetId" placeholder="Enter your Google Sheet ID"/>
+              <small>Found in the URL: sheets.google.com/spreadsheets/d/[SHEET_ID]/edit</small>
+
+            </div>
+
+            <div class="input-group">
+              <label>Sheet Name</label>
+
+              <input type="text" id="sheetName" value="Sheet1" />
+            </div>
+
+            
+
+            <div id="todoList"></div>
+
+            <div class="actions">
+              <button id="importBtn">Import to Google Sheets</button>
+
+              <button id="clearBtn">Clear All</button>
+            </div>
+          </div>
+
+          <div id="status"></div>
+
+          <div class="modal-buttons">
+            <button onclick="closeSheetModal()">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
     <script src="script.js"></script>
-</body>
+    
+    
+    <script>
+      const hamburger = document.getElementById("hamburger");
+      const sidebar = document.getElementById("sidebar");
+
+      const todoPage = document.getElementById("todoPage");
+      const stickyPage = document.getElementById("stickyPage");
+
+      const stickyBtn = document.getElementById("stickyBtn");
+      const todoBtn = document.getElementById("todoBtn");
+
+      hamburger.onclick = () => {
+        sidebar.classList.toggle("collapsed");
+      };
+
+      stickyBtn.onclick = () => {
+        todoPage.style.display = "none";
+        stickyPage.style.display = "block";
+
+        todoBtn.classList.remove("active");
+        stickyBtn.classList.add("active");
+      };
+
+      todoBtn.onclick = () => {
+        stickyPage.style.display = "none";
+        todoPage.style.display = "block";
+
+        stickyBtn.classList.remove("active");
+        todoBtn.classList.add("active");
+      };
+    </script>
+
+    <script>
+      const sheetModal = document.getElementById("sheetModal");
+
+document.getElementById("exportTodoBtn").onclick = () => {
+  sheetModal.style.display = "flex";
+};
+
+document.getElementById("exportStickyBtn").onclick = () => {
+  sheetModal.style.display = "flex";
+};
+
+function closeSheetModal() {
+  sheetModal.style.display = "none";
+}
+    </script>
+
+    <script>
+      function makeModalDraggable(modalSelector) {
+        const modal = $(modalSelector);
+        const header = modal.find(".modal-header");
+
+        let isDragging = false;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        header.css("cursor", "move");
+
+        header.on("mousedown", function (e) {
+          isDragging = true;
+
+          const modalOffset = modal.offset();
+
+          offsetX = e.pageX - modalOffset.left;
+          offsetY = e.pageY - modalOffset.top;
+        });
+
+        $(document).on("mousemove", function (e) {
+          if (isDragging) {
+            modal.css({
+              top: e.pageY - offsetY,
+              left: e.pageX - offsetX,
+              position: "absolute",
+            });
+          }
+        });
+
+        $(document).on("mouseup", function () {
+          isDragging = false;
+        });
+      }
+
+      makeModalDraggable("#addModal");
+      makeModalDraggable("#editModal");
+      makeModalDraggable("#sheetModal");
+
+      $(document).ready(function () {
+  // Other init code
+  loadTasks();
+  initGoogleApis();
+
+  // Open the sheet modal when either button is clicked
+  document.querySelectorAll("#exportTodoBtn, #exportStickyBtn").forEach(btn => {
+    btn.onclick = () => {
+      const sheetModal = document.getElementById("sheetModal");
+      sheetModal.style.display = "flex";
+    };
+  });
+});
+    </script>
+  </body>
 </html>
