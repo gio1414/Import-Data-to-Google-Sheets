@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List → Google Sheets</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <h1>📋 To-Do Sync</h1>
+                <p>Import your to-do list to Google Sheets</p>
+            </div>
+
+            <div class="auth-section">
+                <button id="authButton" class="btn-primary">
+                    <span id="authText">Connect Google Sheets</span>
+                    <div id="authSpinner" class="spinner hidden"></div>
+                </button>
+            </div>
+
+            <div id="todoSection" class="hidden">
+                <div class="input-group">
+                    <label for="sheetId">Google Sheet ID</label>
+                    <input type="text" id="sheetId" placeholder="Enter your Google Sheet ID">
+                    <small>Found in the URL: sheets.google.com/spreadsheets/d/[SHEET_ID]/edit</small>
+                </div>
+
+                <div class="input-group">
+                    <label for="sheetName">Sheet Name</label>
+                    <input type="text" id="sheetName" value="Sheet1" placeholder="Sheet1">
+                </div>
+
+                <div class="todo-input">
+                    <label>Add To-Do Items</label>
+                    <div class="todo-entry">
+                        <input type="text" id="todoInput" placeholder="e.g., Complete project proposal">
+                        <button id="addTodo" class="btn-secondary">+</button>
+                    </div>
+                </div>
+
+                <div id="todoList" class="todo-list"></div>
+
+                <div class="actions">
+                    <button id="importBtn" class="btn-primary full-width" disabled>
+                        <span>Import to Google Sheets</span>
+                        <div class="spinner hidden"></div>
+                    </button>
+                    <button id="clearBtn" class="btn-outline">Clear All</button>
+                </div>
+            </div>
+
+            <div id="status" class="status"></div>
+        </div>
+    </div>
+
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
