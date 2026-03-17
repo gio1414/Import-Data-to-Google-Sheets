@@ -1,9 +1,6 @@
 let currentTaskElement = null;
 let currentStickyNote = null;
-
-/* -------------------------
-   SAVE TASKS (LOCAL STORAGE)
-------------------------- */
+let syncDebounceTimer = null;
 
 function saveTasks() {
   const tasks = [];
@@ -12,8 +9,6 @@ function saveTasks() {
     const id = $(this).data("id");
     const text = $(this).find("span").text();
     const completed = $(this).hasClass("completed");
-
-    // Get the sticky note content if it exists
     const note = $(`#stickyGrid .note[data-id="${id}"]`);
     const noteContent = note.length ? note.find(".note-content").text() : "";
 
@@ -22,10 +17,6 @@ function saveTasks() {
 
   localStorage.setItem("todoTasks", JSON.stringify(tasks));
 }
-
-/* -------------------------
-   SAVE STICKY EDIT
-------------------------- */
 
 $(document).on("click", "#saveStickyEdit", function () {
   if (!currentStickyNote) return;
@@ -45,10 +36,6 @@ $(document).on("click", "#saveStickyEdit", function () {
 
   saveTasks();
 });
-
-/* -------------------------
-   LOAD TASKS
-------------------------- */
 
 function loadTasks() {
   const stored = localStorage.getItem("todoTasks");
@@ -76,10 +63,6 @@ function loadTasks() {
   });
 }
 
-/* -------------------------
-   ADD TASK
-------------------------- */
-
 function addTask() {
   const text = $("#noteInput").val().trim();
   if (!text) return;
@@ -103,11 +86,8 @@ function addTask() {
   $("#addModal").hide();
 
   saveTasks();
+  scheduleSheetsSync();
 }
-
-/* -------------------------
-   CREATE STICKY NOTE
-------------------------- */
 
 function createStickyNote(text, taskId, todoElement, content = "") {
   if ($(`#stickyGrid .note[data-id="${taskId}"]`).length > 0) return;
@@ -136,10 +116,6 @@ function createStickyNote(text, taskId, todoElement, content = "") {
   $("#stickyGrid .add-note").before(note);
 }
 
-// -------------------------
-// ADD NEW NOTE BUTTON
-// -------------------------
-
 $(document).on("click", ".add-note", function () {
   currentEditingNote = null;
 
@@ -149,10 +125,6 @@ $(document).on("click", ".add-note", function () {
   $("#stickyGrid").hide();
   $("#inlineStickyEditor").show();
 });
-
-/* -----------------------------
-   EXPORT STICKY NOTES TO GOOGLE SHEETS
------------------------------ */
 
 $("#exportBtn").click(async function () {
   const sheetId = $("#sheetId").val().trim();
@@ -165,11 +137,10 @@ $("#exportBtn").click(async function () {
 
   const notes = [];
 
-  // Collect all notes except the Add button
   $("#stickyGrid .note").each(function () {
     const title = $(this).find(".note-title").text().trim();
     const content = $(this).find(".note-content").text().trim();
-    if (!title && !content) return; // skip empty placeholders
+    if (!title && !content) return;
 
     notes.push([title, content, new Date().toLocaleString()]);
   });
@@ -180,13 +151,11 @@ $("#exportBtn").click(async function () {
   }
 
   try {
-    // Clear existing data
     await gapi.client.sheets.spreadsheets.values.clear({
       spreadsheetId: sheetId,
       range: `${sheetName}!A:Z`,
     });
 
-    // Add headers
     await gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId: sheetId,
       range: `${sheetName}!A1:C1`,
@@ -194,7 +163,6 @@ $("#exportBtn").click(async function () {
       resource: { values: [["Title", "Content", "Status", "Exported"]] },
     });
 
-    // Append notes
     await gapi.client.sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
       range: `${sheetName}!A:C`,
@@ -208,10 +176,6 @@ $("#exportBtn").click(async function () {
     alert("Sticky notes export failed");
   }
 });
-
-/* -------------------------
-   INLINE EDITOR
-------------------------- */
 
 let currentEditingNote = null;
 
@@ -231,18 +195,16 @@ function openInlineEditor(note) {
 $("#inlineStickyEditor").hide();
 $("#stickyGrid").show();
 currentEditingNote = null;
+
 $("#editorSave").click(() => {
   const newTitle = $("#editorTitle").val().trim();
   const newContent = $("#editorContent").val().trim();
 
-  // Do nothing if both are empty
   if (!newTitle && !newContent) return;
 
-  // If we are editing an existing note
   if (currentEditingNote) {
     const taskId = currentEditingNote.data("id");
 
-    // 1️⃣ Update sticky note
     currentEditingNote.find(".note-title").text(newTitle || "Untitled");
     currentEditingNote.find(".note-content").text(newContent || "");
     const snippet = (newContent || "").replace(/\n/g, " ").substring(0, 50);
@@ -250,17 +212,14 @@ $("#editorSave").click(() => {
       .find(".note-snippet")
       .text(snippet.length >= 50 ? snippet + "..." : snippet);
 
-    // 2️⃣ Update To-Do title
     const todoItem = $(`#taskList li[data-id="${taskId}"]`);
     if (todoItem.length) {
       todoItem.find("span").text(newTitle || todoItem.find("span").text());
     }
   } else {
-    // If there’s no current note, create a new one (placeholder scenario)
     const id = "task_" + Date.now();
     const now = new Date().toLocaleString();
 
-    // Create To-Do
     const todoItem = $(`
 <li data-id="${id}">
   <div class="circle"></div>
@@ -272,7 +231,6 @@ $("#editorSave").click(() => {
 </li>`);
     $("#taskList").append(todoItem);
 
-    // Create Sticky Note
     const snippet = newContent.replace(/\n/g, " ").substring(0, 50);
     const note = $(`
 <div class="note" data-id="${id}">
@@ -284,39 +242,32 @@ $("#editorSave").click(() => {
 </div>`);
     $("#stickyGrid .add-note").before(note);
 
-    // Bind edit button
     note.find(".edit-note-btn").click(function (event) {
       event.stopPropagation();
       openInlineEditor(note);
     });
   }
 
-  // ✅ Always save tasks and return to sticky wall
   saveTasks();
+  scheduleSheetsSync();
+
   $("#inlineStickyEditor").hide();
   $("#stickyGrid").show();
   currentEditingNote = null;
 });
 
-// Inline Sticky Editor Cancel
 $("#editorCancel").click(() => {
-  $("#inlineStickyEditor").hide(); // hide editor
-  $("#stickyGrid").show(); // show sticky wall again
-  currentEditingNote = null; // reset current note
+  $("#inlineStickyEditor").hide();
+  $("#stickyGrid").show();
+  currentEditingNote = null;
 });
 
-/* -------------------------
-   RESTORE STICKY WALL
-------------------------- */
-
 function reloadStickyWall() {
-  // Clear sticky grid but keep the Add Note button
   $("#stickyGrid").html('<div class="add-note">+</div>');
 
   const stored = localStorage.getItem("todoTasks");
 
   if (!stored) {
-    // No saved tasks → show a placeholder note
     addPlaceholderNote();
     return;
   }
@@ -324,21 +275,16 @@ function reloadStickyWall() {
   const tasks = JSON.parse(stored);
 
   if (tasks.length === 0) {
-    // No tasks saved → same placeholder
     addPlaceholderNote();
     return;
   }
 
-  // Load saved tasks with proper content
   tasks.forEach((task) => {
     const todoElement = $(`#taskList li[data-id="${task.id}"]`);
     createStickyNote(task.text, task.id, todoElement, task.content || "");
   });
 }
 
-/* -------------------------
-   Placeholder Note
-------------------------- */
 function addPlaceholderNote() {
   const placeholderId = "placeholder_" + Date.now();
   const now = new Date();
@@ -356,16 +302,11 @@ function addPlaceholderNote() {
 
   $("#stickyGrid .add-note").before(placeholderNote);
 
-  // Enable inline editing for placeholder
   placeholderNote.find(".edit-note-btn").click(function (event) {
     event.stopPropagation();
     openInlineEditor(placeholderNote);
   });
 }
-
-/* -------------------------
-   TODO EDIT MODAL
-------------------------- */
 
 function openEditModal(element) {
   currentTaskElement = element;
@@ -387,6 +328,7 @@ $("#saveEdit").click(function () {
   $("#editModal").hide();
   currentTaskElement = null;
   saveTasks();
+  scheduleSheetsSync();
 });
 
 $("#cancelEdit").click(function () {
@@ -399,31 +341,21 @@ $(document).on("click", ".edit-btn", function () {
   openEditModal(li);
 });
 
-/* -------------------------
-   DELETE TASK
-------------------------- */
-
 $(document).on("click", ".delete-btn", function () {
   const li = $(this).closest("li");
   const id = li.data("id");
   li.remove();
   $(`#stickyGrid .note[data-id="${id}"]`).remove();
   saveTasks();
+  scheduleSheetsSync();
 });
-
-/* -------------------------
-   COMPLETE TASK
-------------------------- */
 
 $(document).on("click", ".circle", function (event) {
   event.stopPropagation();
   $(this).closest("li").toggleClass("completed");
   saveTasks();
+  scheduleSheetsSync();
 });
-
-/* -------------------------
-   ADD MODAL
-------------------------- */
 
 $("#addNoteBtn").click(function () {
   $("#addModal").css("display", "flex");
@@ -438,10 +370,6 @@ $("#noteInput").keypress(function (event) {
   if (event.which === 13) addTask();
 });
 
-/* -------------------------
-   SEARCH TASK
-------------------------- */
-
 $("#searchTask").on("keyup", function () {
   const filter = $(this).val().toLowerCase();
   $("#taskList li").each(function () {
@@ -450,10 +378,6 @@ $("#searchTask").on("keyup", function () {
   });
 });
 
-/* -------------------------
-   SEARCH MENU
-------------------------- */
-
 $("#searchMenu").on("keyup", function () {
   const filter = $(this).val().toLowerCase();
   $("#taskList li").each(function () {
@@ -461,10 +385,6 @@ $("#searchMenu").on("keyup", function () {
     $(this).toggle(taskMenu.indexOf(filter) > -1);
   });
 });
-
-/* -----------------------------
-   GOOGLE SHEETS CONFIG
------------------------------ */
 
 const API_KEY = "AIzaSyBa-LkuYa3OY8g4iCBF6uQIKQJYxFsWV5c";
 const CLIENT_ID =
@@ -476,10 +396,7 @@ const SCOPES = "https://www.googleapis.com/auth/spreadsheets";
 let tokenClient;
 let gapiInited = false;
 let gisInited = false;
-
-/* -----------------------------
-   LOAD GOOGLE API
------------------------------ */
+let sheetsConnected = false;
 
 function initGoogleApis() {
   const script1 = document.createElement("script");
@@ -514,10 +431,6 @@ function initGis() {
   console.log("Google Auth Ready");
 }
 
-/* -----------------------------
-   GOOGLE AUTH
------------------------------ */
-
 $("#authButton").click(function () {
   if (!gapiInited || !gisInited) {
     alert("Google API still loading");
@@ -529,15 +442,67 @@ $("#authButton").click(function () {
       alert("Auth failed");
       return;
     }
+    sheetsConnected = true;
     alert("Connected to Google Sheets");
   };
 
   tokenClient.requestAccessToken({ prompt: "consent" });
 });
 
-/* -----------------------------
-   IMPORT TODOS TO GOOGLE SHEETS
------------------------------ */
+function scheduleSheetsSync() {
+  if (!sheetsConnected) return;
+
+  clearTimeout(syncDebounceTimer);
+  syncDebounceTimer = setTimeout(() => {
+    pushAllToSheets();
+  }, 800);
+}
+
+async function pushAllToSheets() {
+  const sheetId = $("#sheetId").val().trim();
+  const sheetName = $("#sheetName").val() || "Sheet1";
+
+  if (!sheetId || !sheetsConnected) return;
+
+  const tasks = [];
+
+  $("#taskList li").each(function () {
+    const id = $(this).data("id");
+    const title = $(this).find("span").text();
+    const done = $(this).hasClass("completed") ? "Done" : "Pending";
+    const noteContent =
+      $(`#stickyGrid .note[data-id="${id}"] .note-content`).text() || "";
+
+    tasks.push([title, noteContent, done, new Date().toLocaleString()]);
+  });
+
+  if (tasks.length === 0) return;
+
+  try {
+    await gapi.client.sheets.spreadsheets.values.clear({
+      spreadsheetId: sheetId,
+      range: `${sheetName}!A:Z`,
+    });
+
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId: sheetId,
+      range: `${sheetName}!A1:D1`,
+      valueInputOption: "RAW",
+      resource: { values: [["Task", "Notes", "Status", "Last Updated"]] },
+    });
+
+    await gapi.client.sheets.spreadsheets.values.append({
+      spreadsheetId: sheetId,
+      range: `${sheetName}!A2:D`,
+      valueInputOption: "RAW",
+      resource: { values: tasks },
+    });
+
+    console.log(`Synced ${tasks.length} tasks to Sheets`);
+  } catch (err) {
+    console.error("Sync failed:", err);
+  }
+}
 
 $("#importBtn").click(async function () {
   const sheetId = $("#sheetId").val().trim();
@@ -551,11 +516,9 @@ $("#importBtn").click(async function () {
   const tasks = [];
 
   $("#taskList li").each(function () {
-    const id = $(this).data("id"); // task ID
+    const id = $(this).data("id");
     const title = $(this).find("span").text();
     const done = $(this).hasClass("completed") ? "Done" : "Pending";
-
-    // Get corresponding sticky note content if exists
     const noteContent =
       $(`#stickyGrid .note[data-id="${id}"] .note-content`).text() || "";
 
@@ -568,13 +531,11 @@ $("#importBtn").click(async function () {
   }
 
   try {
-    // Clear previous data
     await gapi.client.sheets.spreadsheets.values.clear({
       spreadsheetId: sheetId,
       range: `${sheetName}!A:Z`,
     });
 
-    // Add headers
     await gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId: sheetId,
       range: `${sheetName}!A1:D1`,
@@ -582,7 +543,6 @@ $("#importBtn").click(async function () {
       resource: { values: [["Task", "Notes", "Status", "Exported"]] },
     });
 
-    // Append tasks + sticky notes
     await gapi.client.sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
       range: `${sheetName}!A2:D`,
@@ -590,16 +550,13 @@ $("#importBtn").click(async function () {
       resource: { values: tasks },
     });
 
+    sheetsConnected = true;
     alert(`✅ Exported ${tasks.length} tasks with notes!`);
   } catch (err) {
     console.error(err);
     alert("Export failed");
   }
 });
-
-/* -----------------------------
-   INIT
------------------------------ */
 
 $(document).ready(function () {
   loadTasks();
