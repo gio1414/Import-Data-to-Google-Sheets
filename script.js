@@ -396,7 +396,7 @@ const SCOPES = "https://www.googleapis.com/auth/spreadsheets";
 let tokenClient;
 let gapiInited = false;
 let gisInited = false;
-let sheetsConnected = false;
+let sheetsConnected = localStorage.getItem("sheetsConnected") === "true";
 
 function initGoogleApis() {
   const script1 = document.createElement("script");
@@ -443,6 +443,7 @@ $("#authButton").click(function () {
       return;
     }
     sheetsConnected = true;
+    localStorage.setItem("sheetsConnected", "true");
     alert("Connected to Google Sheets");
   };
 
@@ -459,10 +460,15 @@ function scheduleSheetsSync() {
 }
 
 async function pushAllToSheets() {
-  const sheetId = $("#sheetId").val().trim();
+  const savedId = localStorage.getItem("savedSheetId") || "";
+  const sheetId = $("#sheetId").val().trim() || savedId;
   const sheetName = $("#sheetName").val() || "Sheet1";
 
   if (!sheetId || !sheetsConnected) return;
+
+  if ($("#sheetId").val().trim() === "" && savedId) {
+    $("#sheetId").val(savedId);
+  }
 
   const tasks = [];
 
@@ -476,13 +482,16 @@ async function pushAllToSheets() {
     tasks.push([title, noteContent, done, new Date().toLocaleString()]);
   });
 
-  if (tasks.length === 0) return;
-
   try {
     await gapi.client.sheets.spreadsheets.values.clear({
       spreadsheetId: sheetId,
       range: `${sheetName}!A:Z`,
     });
+
+    if (tasks.length === 0) {
+      console.log("All tasks deleted — sheet cleared");
+      return;
+    }
 
     await gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId: sheetId,
@@ -551,6 +560,8 @@ $("#importBtn").click(async function () {
     });
 
     sheetsConnected = true;
+    localStorage.setItem("sheetsConnected", "true");
+    localStorage.setItem("savedSheetId", sheetId);
     alert(`✅ Exported ${tasks.length} tasks with notes!`);
   } catch (err) {
     console.error(err);
@@ -558,7 +569,21 @@ $("#importBtn").click(async function () {
   }
 });
 
+function openGoogleSheet() {
+  const sheetId = $("#sheetId").val().trim();
+  if (!sheetId) {
+    alert("Enter a Sheet ID first");
+    return;
+  }
+  window.open(`https://docs.google.com/spreadsheets/d/${sheetId}/edit`, "_blank");
+}
+
 $(document).ready(function () {
   loadTasks();
   initGoogleApis();
+
+  const savedSheetId = localStorage.getItem("savedSheetId");
+  if (savedSheetId) {
+    $("#sheetId").val(savedSheetId);
+  }
 });
